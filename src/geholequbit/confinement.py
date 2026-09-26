@@ -30,7 +30,7 @@ def solve_1d_effective_mass(x_m, potential_ev, effective_mass_m0, n_states=4):
     evals=evals[:k]; evecs=evecs[:,:k]
     psi=np.zeros((x.size,k))
     psi[1:-1,:]=evecs
-    norms=np.sqrt(np.trapz(np.abs(psi)**2,x,axis=0))
+    norms=np.sqrt(np.trapezoid(np.abs(psi)**2,x,axis=0))
     psi/=norms
     return evals,psi
 
