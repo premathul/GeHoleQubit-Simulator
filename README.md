@@ -1,94 +1,32 @@
 # GeHoleQubit-Simulator
 
-GeHoleQubit-Simulator is an open-source research software project for building transparent numerical models of **germanium/silicon-germanium (Ge/SiGe) hole-spin qubits**.
+GeHoleQubit-Simulator is a research-oriented Python framework for building transparent numerical models of germanium/silicon-germanium (Ge/SiGe) hole-spin qubits. The project is intended to sit between simple analytical models and full-scale commercial or multiphysics device simulation. Its purpose is not to hide the physics behind a single black-box command, but to make each modeling step explicit enough that a researcher can inspect the governing equations, verify the units, test numerical convergence, and understand which assumptions control the final prediction. The long-term objective is to create a coherent open research workflow that connects electrostatic confinement, orbital structure, spin response, electrical susceptibility, and decoherence in a form that is practical for device design and scientific interpretation.
 
-The long-term objective is to provide a modular workflow that connects semiconductor confinement physics to experimentally relevant qubit observables:
+The central scientific motivation comes from the strongly anisotropic nature of hole-spin qubits in strained Ge/SiGe heterostructures. Hole states can exhibit large and highly direction-dependent effective (g)-factors because the spin degree of freedom is entangled with orbital structure, confinement, strain, and spin-orbit coupling. As a consequence, the qubit transition frequency is not determined by a single scalar (g)-factor. Instead, it is naturally described using an effective (g)-tensor. At the same time, gate voltages that shape the confinement potential can modify that spin response, which means that electrical control and electrical noise are intrinsically linked. A realistic computational framework therefore has to treat magnetic-field orientation, orbital confinement, gate-voltage sensitivity, and dephasing as connected parts of the same problem.
 
-[
-	ext{device potential}
-ightarrow
-	ext{orbital states}
-ightarrow
-g	ext{-tensor}
-ightarrow
-	ext{Zeeman splitting}
-ightarrow
-	ext{electrical susceptibility}
-ightarrow
-T_2^*
-ightarrow
-T_1.
-]
+At the current stage, the repository provides a set of validated low-level building blocks. These include effective Zeeman calculations based on a (3	imes3) (g)-tensor, conversion between spherical magnetic-field angles and Cartesian field vectors, principal-axis analysis of the tensor (G=g^Tg), simple one-dimensional effective-mass confinement, and first-order quasistatic dephasing models that support correlated electrical noise. These capabilities are intentionally modular. A user can study only the Zeeman response, only the confinement problem, or only the dephasing calculation, while still retaining the option to connect the pieces into a larger device workflow.
 
-The project is intentionally structured as a collection of small, auditable numerical components rather than as a black-box simulator. Each model is meant to expose its assumptions, units, approximations, and numerical conventions so that the calculation can be inspected and independently validated.
-
-> **Important:** this repository is research software under active development. It does not currently replace a self-consistent Poisson–Schrödinger solver, multiband k·p package, QTCAD, COMSOL, or another calibrated device-level TCAD framework.
-
----
-
-## 1. Scientific motivation
-
-Hole-spin qubits in strained Ge/SiGe heterostructures are promising because they combine strong spin-orbit coupling, electrical controllability, low nuclear-spin environments, and compatibility with semiconductor nanofabrication.
-
-These same advantages also make the physics highly anisotropic. The qubit frequency can depend strongly on:
-
-- magnetic-field magnitude,
-- magnetic-field orientation,
-- confinement geometry,
-- heavy-hole/light-hole mixing,
-- gate voltages,
-- vertical and lateral electric fields,
-- strain,
-- spin-orbit coupling,
-- interface details,
-- charge noise.
-
-A useful modeling framework must therefore go beyond a single scalar (g)-factor or a single fitted coherence time.
-
-This repository is being developed around that principle.
-
----
-
-## 2. Current capabilities
-
-The current codebase contains three main physics layers.
-
-### 2.1 Effective Zeeman physics
-
-For a magnetic field (mathbf B), the effective spin Hamiltonian can be written in terms of a (3	imes3) (g)-tensor,
+For a magnetic field (mathbf B), the effective Zeeman splitting is modeled as
 
 [
-H_Z = rac{mu_B}{2},oldsymbol{sigma}cdot mathbf g mathbf B.
+Delta E_Z=mu_Bleft|mathbf gmathbf Bight|,
 ]
 
-The resulting Zeeman splitting is
+where (mu_B) is the Bohr magneton and (mathbf g) is the effective (g)-tensor. The corresponding qubit frequency is
 
 [
-Delta E_Z = mu_B left|mathbf gmathbf Bight|.
+f_Z=rac{Delta E_Z}{h}.
 ]
 
-The corresponding qubit frequency is
+This form naturally captures anisotropy because the magnitude of (mathbf gmathbf B) depends on the field direction. The package also works with the symmetric tensor
 
 [
-f_Z = rac{Delta E_Z}{h}.
+G=g^Tg,
 ]
 
-The package provides:
+whose eigenvectors define principal magnetic-field directions and whose eigenvalues determine the squares of the principal effective (g)-factors. This representation is particularly useful because the observable Zeeman splitting depends on (G) even when the matrix representation of (g) itself is not unique under basis transformations.
 
-- conversion from magnetic-field angles to Cartesian vectors,
-- Zeeman splitting in electronvolts,
-- Zeeman frequency in hertz,
-- effective (g)-factor evaluation,
-- (g^Tg) metric construction,
-- principal (g)-value extraction,
-- principal magnetic-field directions,
-- angular maps of (g_{m eff}).
-
-### 2.2 One-dimensional effective-mass confinement
-
-A finite-difference effective-mass Schrödinger solver is included as the first confinement layer.
-
-For a particle with effective mass (m^*),
+The confinement module currently implements a finite-difference solution of the one-dimensional effective-mass Schrödinger equation,
 
 [
 left[
@@ -100,108 +38,40 @@ V(x)
 E_npsi_n(x).
 ]
 
-The numerical solver currently assumes:
+The solver assumes a uniform spatial grid, a constant scalar effective mass, and Dirichlet boundary conditions. These assumptions are deliberately simple, but they are useful for validating the numerical infrastructure before moving to more realistic two-dimensional or multiband calculations. The repository includes a harmonic-oscillator benchmark so that the numerical level spacing can be compared against the analytical value (hbaromega). This kind of benchmark is important because a solver should be validated against a case with a known answer before it is trusted for less transparent device potentials.
 
-- one spatial dimension,
-- constant effective mass,
-- uniform spatial grid,
-- Dirichlet boundary conditions,
-- scalar confinement potential,
-- no explicit spin-orbit coupling.
-
-It returns:
-
-- low-lying eigenenergies,
-- normalized eigenfunctions,
-- orbital level spacings.
-
-A harmonic-confinement utility is included for analytical benchmarking.
-
-### 2.3 Quasistatic electrical dephasing
-
-Suppose the qubit frequency depends on multiple gate voltages,
+The noise model focuses initially on quasistatic electrical fluctuations. If the qubit frequency depends on multiple gates, then a small fluctuation can be linearized as
 
 [
-f_Z=f_Z(V_1,V_2,ldots,V_N).
-]
-
-To first order,
-
-[
-delta f
+delta f_Z
 approx
 sum_i
 rac{partial f_Z}{partial V_i}delta V_i.
 ]
 
-For a sensitivity vector
+Writing the gate sensitivities as a vector (mathbf s) and the voltage-noise covariance as (mathbf C_V), the resulting frequency variance is
 
 [
-mathbf s =
-left(
-rac{partial f_Z}{partial V_1},
-ldots,
-rac{partial f_Z}{partial V_N}
-ight),
+sigma_f^2=mathbf s^Tmathbf C_Vmathbf s.
 ]
 
-and voltage-noise covariance matrix (mathbf C_V),
+This form is intentionally more general than assuming every gate fluctuates independently. Correlated voltage noise can be included through the off-diagonal elements of (mathbf C_V). For Gaussian quasistatic frequency noise, the Ramsey envelope convention used in this project is
 
 [
-sigma_f^2
-=
-mathbf s^T mathbf C_V mathbf s.
+W(t)=expleft[-2pi^2sigma_f^2t^2ight],
 ]
 
-For Gaussian quasistatic frequency noise, the Ramsey envelope convention used here is
+which gives the (1/e) dephasing time
 
 [
-W(t)
-=
-expleft[-2pi^2sigma_f^2t^2ight].
+T_2^*=rac{1}{sqrt{2}pisigma_f}.
 ]
 
-The corresponding (1/e) dephasing time is
+The convention is stated explicitly because factors of (2), (pi), and definitions of one-sided versus two-sided spectral density are common sources of disagreement between different codes and publications.
 
-[
-T_2^*
-=
-rac{1}{sqrt{2}pisigma_f}.
-]
+The repository is organized as a Python package under `src/geholequbit`. The `core.py` module contains fundamental Zeeman and field-orientation utilities. The `gtensor.py` module contains principal-axis and effective-(g) analysis. The `confinement.py` module contains the current finite-difference Schrödinger solver and harmonic confinement helpers. The `noise.py` module implements covariance-based frequency-noise propagation and (T_2^*) calculations. The `examples` directory contains small runnable demonstrations, while the `tests` directory contains analytical and numerical validation checks. GitHub Actions automatically executes the test suite after repository updates so that regressions are detected early.
 
-The implementation supports both independent and correlated gate noise.
-
----
-
-## 3. Repository structure
-
-```text
-GeHoleQubit-Simulator/
-├── README.md
-├── pyproject.toml
-├── examples/
-│   ├── example.py
-│   └── confinement_demo.py
-├── src/
-│   └── geholequbit/
-│       ├── __init__.py
-│       ├── core.py
-│       ├── confinement.py
-│       ├── gtensor.py
-│       └── noise.py
-├── tests/
-│   ├── test_core.py
-│   └── test_extended.py
-└── .github/
-    └── workflows/
-        └── tests.yml
-```
-
----
-
-## 4. Installation
-
-A recent Python installation is recommended.
+A typical installation uses an editable Python environment:
 
 ```bash
 git clone https://github.com/premathul/GeHoleQubit-Simulator.git
@@ -209,16 +79,14 @@ cd GeHoleQubit-Simulator
 python -m pip install -e .
 ```
 
-For development and testing:
+For development, testing support can be installed with
 
 ```bash
 python -m pip install -e .[dev]
 pytest -q
 ```
 
----
-
-## 5. Quick example: Zeeman anisotropy
+A minimal Zeeman calculation can be written as
 
 ```python
 import numpy as np
@@ -229,29 +97,23 @@ B = 0.5
 
 for theta in (0, 30, 60, 90):
     field = field_from_angles(B, theta)
-    f = zeeman_frequency_hz(g, field)
-    print(theta, f / 1e9, "GHz")
+    frequency = zeeman_frequency_hz(g, field)
+    print(theta, frequency / 1e9, "GHz")
 ```
 
-This is a synthetic example and is **not** intended to represent a calibrated device.
+The numerical values in this example are synthetic and are not intended to represent a calibrated experimental device. The purpose of the example is to demonstrate how an anisotropic tensor produces a strong angular dependence of the spin resonance.
 
----
-
-## 6. Quick example: confinement
+The confinement solver can be exercised with a harmonic potential:
 
 ```python
 import numpy as np
-from geholequbit.confinement import (
-    harmonic_potential_ev,
-    solve_1d_effective_mass,
-)
+from geholequbit.confinement import harmonic_potential_ev, solve_1d_effective_mass
 
 mass = 0.08
 omega = 2 * np.pi * 100e9
-
 x = np.linspace(-80e-9, 80e-9, 241)
-V = harmonic_potential_ev(x, mass, omega)
 
+V = harmonic_potential_ev(x, mass, omega)
 energies, wavefunctions = solve_1d_effective_mass(
     x,
     V,
@@ -262,121 +124,32 @@ energies, wavefunctions = solve_1d_effective_mass(
 print(energies * 1e3)
 ```
 
-The result can be compared with the analytical harmonic-oscillator spacing
+The present code should be interpreted as a foundation rather than a complete device simulator. It does not yet perform self-consistent Poisson–Schrödinger calculations, does not solve a multiband Luttinger–Kohn Hamiltonian, and does not derive the (g)-tensor microscopically from strain, interfaces, or heavy-hole/light-hole mixing. It also does not yet compute realistic phonon-limited (T_1), electrically driven Rabi frequencies, orbital-dependent spin-orbit matrix elements, or experimentally calibrated lever arms. Those omissions are intentional and are documented rather than hidden. Any quantitative device prediction will ultimately require additional physical layers and comparison against experiment or a higher-fidelity solver.
+
+The next major stage of development is to extend the confinement calculation from one dimension to two dimensions and eventually to realistic gate-defined potentials. That will require sparse-matrix methods, convergence studies with respect to mesh spacing and domain size, support for anisotropic or position-dependent effective mass, and a clean interface between electrostatic potential maps and the quantum solver. Once that infrastructure is stable, the project can begin incorporating more realistic hole physics, including heavy-hole/light-hole mixing, simplified Luttinger Hamiltonians, strain terms, and effective spin-orbit coupling.
+
+A second major direction is to make the (g)-tensor itself a function of gate voltage and confinement. The physically relevant quantity for coherence is not only (g), but also derivatives such as
 
 [
-E_{n+1}-E_n=hbaromega.
+rac{partial g_{ij}}{partial V_k}
 ]
 
-That comparison is included in the automated tests.
-
----
-
-## 7. Numerical validation
-
-The project uses explicit validation tests wherever possible.
-
-Current checks include:
-
-- isotropic (g)-tensor Zeeman frequency,
-- principal-axis recovery for diagonal (g)-tensors,
-- normalization of wavefunctions,
-- harmonic oscillator level-spacing consistency,
-- covariance-based frequency-noise propagation,
-- correct zero-noise behavior for (T_2^*).
-
-GitHub Actions automatically runs the test suite after pushes and pull requests.
-
-Validation is treated as part of the scientific model, not merely as software maintenance.
-
----
-
-## 8. Units and conventions
-
-The project currently uses:
-
-- magnetic field: tesla,
-- energy: electronvolts unless a function explicitly states otherwise,
-- frequency: hertz,
-- position: meters,
-- voltage: volts,
-- time: seconds,
-- effective mass: units of free-electron mass (m_0).
-
-Every new public function should document its units.
-
-Unit ambiguity is considered a bug.
-
----
-
-## 9. What this project does not yet model
-
-The current code does **not** yet provide:
-
-- self-consistent electrostatics,
-- realistic 2D or 3D gate geometry,
-- spatially varying dielectric constants,
-- multiband Luttinger–Kohn Hamiltonians,
-- heavy-hole/light-hole mixing from first principles,
-- Rashba or Dresselhaus terms from a microscopic Hamiltonian,
-- strain-dependent band edges,
-- atomistic interfaces,
-- valley physics,
-- realistic phonon-induced (T_1),
-- calibrated device-specific voltage lever arms,
-- finite-temperature occupation,
-- many-body interactions.
-
-These are roadmap items rather than hidden assumptions.
-
----
-
-## 10. Planned development
-
-### Phase I — effective models
-
-- expand (g)-tensor utilities,
-- voltage derivatives of the (g)-tensor,
-- uncertainty propagation,
-- arbitrary covariance matrices,
-- field-angle sweeps,
-- plotting utilities,
-- structured parameter files.
-
-### Phase II — confinement
-
-- 2D finite-difference Schrödinger solver,
-- anisotropic effective masses,
-- position-dependent masses,
-- double-well confinement,
-- expectation values,
-- orbital dipole matrix elements,
-- mesh-convergence tools.
-
-### Phase III — semiconductor-specific physics
-
-- simplified Luttinger Hamiltonian,
-- heavy-hole/light-hole mixing,
-- strain terms,
-- spin-orbit coupling,
-- electric-dipole spin resonance observables,
-- effective (g)-tensor extraction.
-
-### Phase IV — coherence
-
-- gate-specific susceptibility,
-- correlated voltage noise,
-- numerical (1/f) Ramsey envelopes,
-- echo and dynamical-decoupling filters,
-- (T_2^*) angular maps,
-- phonon-assisted (T_1).
-
-### Phase V — device-level workflow
-
-The long-term architecture is
+and therefore
 
 [
-	ext{geometry}
+rac{partial f_Z}{partial V_k}.
+]
+
+These quantities connect the microscopic device state to experimentally measurable dephasing. Once they are available, the simulator can interface directly with more detailed noise models, including (1/f) noise and filter-function calculations provided by the companion QuantumDot-Noise-Lab repository.
+
+A third development direction is numerical uncertainty and convergence. A scientifically useful result should not consist only of a central value. The code should make it possible to quantify sensitivity to mesh spacing, effective-mass assumptions, fitted (g)-tensor elements, gate-noise amplitudes, and finite-difference step size. The long-term aim is for each major simulation to report both the predicted observable and the numerical or model uncertainty that accompanies it.
+
+The project follows a reproducibility-first philosophy. A calculation should ideally record the model equations, numerical grid, constants, input parameters, solver tolerances, derivative step sizes, noise assumptions, software version, and Git commit. Future versions will increasingly use configuration files so that a complete calculation can be reproduced from a small version-controlled parameter set rather than from an undocumented notebook or interactive session.
+
+The intended long-term workflow is
+
+[
+	ext{device geometry}
 ightarrow
 phi(mathbf r)
 ightarrow
@@ -388,88 +161,19 @@ g_{ij}
 ightarrow
 f_Z
 ightarrow
-partial f_Z/partial V_i
+rac{partial f_Z}{partial V_i}
 ightarrow
-T_2^*,T_1.
+T_2^*
+ightarrow
+T_1.
 ]
 
----
+That roadmap is deliberately ambitious, but each intermediate stage is designed to remain independently testable. The project should remain useful even before the final end-to-end workflow is complete.
 
-## 11. Reproducibility philosophy
+This repository is appropriate for exploratory calculations, numerical method development, graduate-level research training, analytical cross-checks, and reproducible comparisons with higher-fidelity semiconductor simulators. A result produced by this code should not be considered experimentally predictive solely because it is numerically precise. Physical calibration, convergence, model validity, and uncertainty analysis remain essential.
 
-A scientific result should ideally contain enough information to reconstruct:
+## Contact
 
-- model equations,
-- numerical grid,
-- physical constants,
-- parameter values,
-- solver tolerances,
-- convergence criteria,
-- random seeds,
-- software version.
+**Athul Prem**
 
-Future releases will move increasingly toward configuration-driven simulations so complete numerical experiments can be recreated from version-controlled parameter files.
-
----
-
-## 12. Research use
-
-The repository is intended for:
-
-- exploratory calculations,
-- method development,
-- teaching,
-- numerical verification,
-- comparison against higher-fidelity solvers,
-- reproducible research workflows.
-
-A prediction should not be considered experimentally quantitative simply because the code returns many digits.
-
-Model validity, convergence, calibration, and uncertainty must be established separately.
-
----
-
-## 13. Contributing
-
-Useful contributions include:
-
-- physics-model implementations,
-- analytical benchmark tests,
-- numerical convergence tests,
-- documentation improvements,
-- bug reports,
-- additional confinement models,
-- plotting utilities,
-- literature-backed physical constants.
-
-New physics modules should preferably include:
-
-1. the governing equation,
-2. assumptions,
-3. units,
-4. at least one validation test,
-5. a minimal example.
-
----
-
-## 14. Citation
-
-A formal `CITATION.cff` file will be added as the project matures.
-
-Until then, if this repository contributes to academic work, cite the repository URL and the exact Git commit used in the calculation.
-
----
-
-## 15. License
-
-MIT License.
-
----
-
-## 16. Project status
-
-**Status:** active development.
-
-The repository currently provides a validated foundation for effective Zeeman physics, simple confinement calculations, (g)-tensor analysis, and first-order quasistatic dephasing.
-
-The scientific ambition is larger: to progressively connect Ge/SiGe device geometry to experimentally measurable spin-qubit coherence in a transparent, reproducible numerical framework.
+For questions, research discussion, collaboration, or suggestions related to this project, please contact Athul Prem through the GitHub account associated with this repository.
